@@ -53,6 +53,40 @@ if (purgeInterval && typeof purgeInterval.unref === 'function') {
 }
 
 /**
+ * Locates the YouTube cookies.txt file across standard local and cloud secret mount paths:
+ * 1. process.env.COOKIES_PATH
+ * 2. /etc/secrets/cookies.txt (Render default Secret File mount path)
+ * 3. /etc/secrets/Vidloader/cookies.txt (Render Environment Group mount path)
+ * 4. /etc/secrets/vidloader/cookies.txt
+ * 5. process.cwd() + '/cookies.txt' (Local or Docker /app root)
+ * 6. Relative directory paths
+ */
+export function getCookieFilePath() {
+  const candidates = [
+    process.env.COOKIES_PATH,
+    '/etc/secrets/cookies.txt',
+    '/etc/secrets/Vidloader/cookies.txt',
+    '/etc/secrets/vidloader/cookies.txt',
+    path.resolve(process.cwd(), 'cookies.txt'),
+    path.resolve(__dirname, '../../cookies.txt'),
+    path.resolve(__dirname, 'cookies.txt'),
+  ].filter(Boolean);
+
+  for (const cPath of candidates) {
+    try {
+      if (fs.existsSync(cPath)) {
+        const stat = fs.statSync(cPath);
+        if (stat.isFile() && stat.size > 0) {
+          try { fs.chmodSync(cPath, 0o600); } catch {}
+          return cPath;
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
  * Validates that an incoming URL is a public, safe HTTP or HTTPS media URL,
  * mitigating Server-Side Request Forgery (SSRF) against internal resources.
  */
@@ -331,24 +365,16 @@ function cleanYtDlpError(rawStderr) {
  */
 export async function resolveVideo(url, platform = null) {
   return new Promise((resolve) => {
-    // Check for optional cookies.txt in workspace or server root
-    const cookieCandidates = [
-      path.resolve(process.cwd(), 'cookies.txt'),
-      path.resolve(__dirname, '../../cookies.txt'),
-      path.resolve(__dirname, 'cookies.txt'),
-    ];
-    let cookieArgs = [];
-    for (const cPath of cookieCandidates) {
-      if (fs.existsSync(cPath)) {
-        try { fs.chmodSync(cPath, 0o600); } catch {}
-        cookieArgs = ['--cookies', cPath];
-        break;
-      }
+    // Check for optional cookies.txt in workspace, server root, or Render secret files
+    const activeCookiePath = getCookieFilePath();
+    const cookieArgs = activeCookiePath ? ['--cookies', activeCookiePath] : [];
+    if (activeCookiePath) {
+      console.log('[VidLoader Resolve] Using cookies file for YouTube auth:', activeCookiePath);
     }
 
     const nodeExec = process.execPath || 'node';
     const extractorArgs = cookieArgs.length > 0
-      ? ['--extractor-args', 'youtube:player_client=web_embedded,web']
+      ? ['--extractor-args', 'youtube:player_client=web,web_embedded']
       : ['--extractor-args', 'youtube:player_client=android,ios,visionos,web'];
 
     const args = [
@@ -1060,21 +1086,21 @@ export function vidloaderBackendPlugin() {
             ffmpegCheck = fRes.status === 0;
           } catch {}
 
+          const activeCookiePath = getCookieFilePath();
           let diag = null;
           const parsed = new URL(req.url, 'http://localhost');
           if (parsed.searchParams.get('diag') === '1') {
             const testUrl = parsed.searchParams.get('url') || 'https://www.youtube.com/watch?v=2smi1gjBBIw';
             const nodeExec = process.execPath || 'node';
-            const cookiePath = path.resolve(process.cwd(), 'cookies.txt');
-            const hasC = fs.existsSync(cookiePath);
+            const hasC = Boolean(activeCookiePath);
             const dRes = spawnSync(detected.cmd, [
               ...detected.prefixArgs,
               '--js-runtimes', `node:${nodeExec}`,
               '--remote-components', 'ejs:github',
               '--no-warnings',
               '--no-playlist',
-              ...(hasC ? ['--cookies', cookiePath] : []),
-              '--extractor-args', 'youtube:player_client=web_embedded,web',
+              ...(hasC ? ['--cookies', activeCookiePath] : []),
+              '--extractor-args', hasC ? 'youtube:player_client=web,web_embedded' : 'youtube:player_client=android,web',
               '-v',
               '-F', testUrl
             ], {
@@ -1093,6 +1119,7 @@ export function vidloaderBackendPlugin() {
               stderr: dRes.stderr?.toString(),
               nodeExec,
               hasCookies: hasC,
+              cookiePath: activeCookiePath,
             };
           }
 
@@ -1102,8 +1129,12 @@ export function vidloaderBackendPlugin() {
             ok: true,
             server: 'VidLoader Production Engine',
             port: process.env.PORT || 5173,
-            version: '2.4.1',
+            version: '2.4.2',
             os: process.platform,
+            cookies: {
+              detected: Boolean(activeCookiePath),
+              path: activeCookiePath,
+            },
             ytdlp: detected,
             python: workingPython,
             ffmpeg: ffmpegCheck,
@@ -1149,25 +1180,16 @@ function startBackgroundDownload(job) {
     height = 360;
   }
 
-  // Check for optional cookies.txt in workspace or server root
-  const cookieCandidates = [
-    path.resolve(process.cwd(), 'cookies.txt'),
-    path.resolve(__dirname, '../../cookies.txt'),
-    path.resolve(__dirname, 'cookies.txt'),
-  ];
-  let cookieArgs = [];
-  for (const cPath of cookieCandidates) {
-    if (fs.existsSync(cPath)) {
-      try { fs.chmodSync(cPath, 0o600); } catch {}
-      cookieArgs = ['--cookies', cPath];
-      console.log('[VidLoader] Using cookies file for YouTube auth:', cPath);
-      break;
-    }
+  // Check for optional cookies.txt in workspace, server root, or Render secret files
+  const activeCookiePath = getCookieFilePath();
+  const cookieArgs = activeCookiePath ? ['--cookies', activeCookiePath] : [];
+  if (activeCookiePath) {
+    console.log('[VidLoader Download] Using cookies file for YouTube auth:', activeCookiePath);
   }
 
   const nodeExec = process.execPath || 'node';
   const extractorArgs = cookieArgs.length > 0
-    ? ['--extractor-args', 'youtube:player_client=web_embedded,web']
+    ? ['--extractor-args', 'youtube:player_client=web,web_embedded']
     : ['--extractor-args', 'youtube:player_client=android,ios,visionos,web'];
 
   const baseArgs = [

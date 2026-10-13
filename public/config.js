@@ -1,3 +1,3 @@
 // VidLoader Dynamic Backend Configuration
-// Set this to your Render backend URL (e.g. "https://vidloader-backend.onrender.com/api")
-window.__VIDLOADER_API_URL__ = window.__VIDLOADER_API_URL__ || "";
+// Connected to Render Web Service: https://vidloader-8wty.onrender.com
+window.__VIDLOADER_API_URL__ = "https://vidloader-8wty.onrender.com/api";
