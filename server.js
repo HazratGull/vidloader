@@ -160,6 +160,18 @@ const server = http.createServer((req, res) => {
       return fs.createReadStream(indexHtml).pipe(res);
     }
 
+    if (rawPath === '/' || rawPath === '/index.html') {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({
+        status: 'ok',
+        service: 'VidLoader Backend API Engine',
+        version: '2.4.1',
+        message: 'Backend is active. Connect your frontend to this service.',
+        endpoints: ['/health', '/api/system-status', '/api/resolve', '/api/process']
+      }));
+    }
+
     res.statusCode = 404;
     res.end('Not Found');
   });

@@ -1,11 +1,14 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
-import { vidloaderBackendPlugin } from './src/server/backend.js'
 
 // https://vite.dev/config/
-export default defineConfig(({ command }) => ({
-  plugins: [
-    react(),
-    command === 'serve' ? vidloaderBackendPlugin() : null,
-  ].filter(Boolean),
-}))
+export default defineConfig(async ({ command }) => {
+  const plugins = [react()]
+  if (command === 'serve') {
+    const { vidloaderBackendPlugin } = await import('./src/server/backend.js')
+    plugins.push(vidloaderBackendPlugin())
+  }
+  return {
+    plugins: plugins.filter(Boolean),
+  }
+})

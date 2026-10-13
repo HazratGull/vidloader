@@ -8,6 +8,8 @@ temp_downloads
 *.vbs
 yt-dlp
 yt-dlp_linux
+yt_dlp
+yt_dlp/**
 *.exe
 audit_results
 scratch

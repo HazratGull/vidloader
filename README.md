@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # VidLoader — High-Performance Universal Video & Audio Downloader
 
 VidLoader (`vidloader.online`) is a modern, responsive web application for resolving, streaming, and converting videos and audio from public social media platforms (YouTube, TikTok, Instagram Reels, Facebook, Reddit, Twitter/X, and Dailymotion) into high-definition MP4 and 320kbps MP3 formats.
@@ -91,3 +92,6 @@ Runs the standalone production server serving static assets with immutable cache
 ## License
 
 This project is licensed under the MIT License.
+=======
+# vidloader
+>>>>>>> 1e351ba16a4317a7731b0d76323d366e0ab86ea8

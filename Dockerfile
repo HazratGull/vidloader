@@ -1,10 +1,10 @@
 # =======================================================
 # VidLoader - Render Docker Production Container
-# Multi-stage build: compiles React frontend & Node backend
-# System dependencies: Node 20 LTS, Python 3, yt-dlp, ffmpeg
+# Multi-stage build: compiles React frontend + installs
+# Node 20, Python 3, yt-dlp, and ffmpeg
 # =======================================================
 
-# ---- Stage 1: Build React Frontend ----
+# Stage 1: Build React Frontend
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY package*.json ./
@@ -12,7 +12,7 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# ---- Stage 2: Production Server Runner ----
+# Stage 2: Production API & Media Processing Engine
 FROM node:20-slim
 
 # Install system dependencies: Python 3, pip, ffmpeg, curl
@@ -29,14 +29,14 @@ RUN pip3 install --no-cache-dir --break-system-packages yt-dlp
 
 WORKDIR /app
 
-# Install production dependencies only (lean runtime)
+# Install production dependencies only (fast, lightweight install)
 COPY package*.json ./
 RUN npm install --omit=dev
 
 # Copy application source code
 COPY . .
 
-# Copy compiled production frontend from builder stage
+# Copy compiled frontend from builder stage
 COPY --from=builder /app/dist ./dist
 
 # Ephemeral scratch directory for active streaming jobs
@@ -53,5 +53,5 @@ EXPOSE 10000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:10000/health || exit 1
 
-# Start production HTTP server
+# Start production API server
 CMD ["node", "server.js"]
