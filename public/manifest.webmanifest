@@ -1,0 +1,45 @@
+{
+  "id": "/",
+  "name": "VidLoader - Video Downloader",
+  "short_name": "VidLoader",
+  "description": "Fast, high-definition online video downloader for PC and Android. Download MP4 and MP3 instantly without registration.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#74c000",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/vidloader-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/vidloader-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/vidloader-icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/vidloader-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/vidloader-logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["utilities", "productivity", "multimedia"]
+}

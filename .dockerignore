@@ -1,0 +1,14 @@
+node_modules
+dist
+dev-dist
+.git
+temp_downloads
+*.zip
+*.bat
+*.vbs
+yt-dlp
+yt-dlp_linux
+*.exe
+audit_results
+scratch
+cookies.txt

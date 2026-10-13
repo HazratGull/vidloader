@@ -1,0 +1,152 @@
+{
+  "viewports": {
+    "360x640_mobile_small": {
+      "passed": true,
+      "initialHScroll": false,
+      "finalHScroll": false,
+      "finishedCardOverflow": false,
+      "isProgressMonotonic": true,
+      "progressSequence": "15",
+      "failed403sCount": 0,
+      "touchTargetsUndersized": 0,
+      "reviewModal": {
+        "title": "Rate your experience",
+        "starCount": 5,
+        "preSelectedCount": 0,
+        "hasTextarea": true,
+        "hasSubmitBtn": true,
+        "hasLaterBtn": true,
+        "hasDuplicatedStarLine": false,
+        "hasCountText": false,
+        "hasChips": false,
+        "hasNameInput": false,
+        "hasMarketingFooter": false,
+        "dismissedCleanly": true
+      }
+    },
+    "390x844_mobile_iphone": {
+      "passed": true,
+      "initialHScroll": false,
+      "finalHScroll": false,
+      "finishedCardOverflow": false,
+      "isProgressMonotonic": true,
+      "progressSequence": "15",
+      "failed403sCount": 0,
+      "touchTargetsUndersized": 0,
+      "reviewModal": {
+        "title": "Rate your experience",
+        "starCount": 5,
+        "preSelectedCount": 0,
+        "hasTextarea": true,
+        "hasSubmitBtn": true,
+        "hasLaterBtn": true,
+        "hasDuplicatedStarLine": false,
+        "hasCountText": false,
+        "hasChips": false,
+        "hasNameInput": false,
+        "hasMarketingFooter": false,
+        "dismissedCleanly": true
+      }
+    },
+    "768x1024_tablet_ipad": {
+      "passed": true,
+      "initialHScroll": false,
+      "finalHScroll": false,
+      "finishedCardOverflow": false,
+      "isProgressMonotonic": true,
+      "progressSequence": "15",
+      "failed403sCount": 0,
+      "touchTargetsUndersized": 0,
+      "reviewModal": {
+        "title": "Rate your experience",
+        "starCount": 5,
+        "preSelectedCount": 0,
+        "hasTextarea": true,
+        "hasSubmitBtn": true,
+        "hasLaterBtn": true,
+        "hasDuplicatedStarLine": false,
+        "hasCountText": false,
+        "hasChips": false,
+        "hasNameInput": false,
+        "hasMarketingFooter": false,
+        "dismissedCleanly": true
+      }
+    },
+    "1366x768_laptop_std": {
+      "passed": true,
+      "initialHScroll": false,
+      "finalHScroll": false,
+      "finishedCardOverflow": false,
+      "isProgressMonotonic": true,
+      "progressSequence": "15",
+      "failed403sCount": 0,
+      "touchTargetsUndersized": 0,
+      "reviewModal": {
+        "title": "Rate your experience",
+        "starCount": 5,
+        "preSelectedCount": 0,
+        "hasTextarea": true,
+        "hasSubmitBtn": true,
+        "hasLaterBtn": true,
+        "hasDuplicatedStarLine": false,
+        "hasCountText": false,
+        "hasChips": false,
+        "hasNameInput": false,
+        "hasMarketingFooter": false,
+        "dismissedCleanly": true
+      }
+    },
+    "1920x1080_desktop_fhd": {
+      "passed": true,
+      "initialHScroll": false,
+      "finalHScroll": false,
+      "finishedCardOverflow": false,
+      "isProgressMonotonic": true,
+      "progressSequence": "15",
+      "failed403sCount": 0,
+      "touchTargetsUndersized": 0,
+      "reviewModal": {
+        "title": "Rate your experience",
+        "starCount": 5,
+        "preSelectedCount": 0,
+        "hasTextarea": true,
+        "hasSubmitBtn": true,
+        "hasLaterBtn": true,
+        "hasDuplicatedStarLine": false,
+        "hasCountText": false,
+        "hasChips": false,
+        "hasNameInput": false,
+        "hasMarketingFooter": false,
+        "dismissedCleanly": true
+      }
+    }
+  },
+  "edgeCases": {
+    "empty_input": {
+      "pass": true,
+      "message": "Please enter or paste a valid video URL."
+    },
+    "invalid_url": {
+      "pass": true,
+      "message": "This platform is not currently supported."
+    },
+    "private_video_error": {
+      "pass": true,
+      "message": "Could not fetch media information from this URL. Please verify the URL is public, accessible, and not private or age-restricted.",
+      "hasStack": false
+    },
+    "retry_after_failure": {
+      "pass": true,
+      "isRetrying": true
+    },
+    "cancel_mid_download": {
+      "pass": true
+    },
+    "double_click_protection": {
+      "pass": true,
+      "activeCards": 1,
+      "isBtnDisabled": true
+    }
+  },
+  "overallPass": true
+}

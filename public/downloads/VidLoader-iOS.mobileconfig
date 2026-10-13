@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>FullScreen</key>
+            <true/>
+            <key>Icon</key>
+            <data>
+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
+            </data>
+            <key>IsRemovable</key>
+            <true/>
+            <key>Label</key>
+            <string>VidLoader</string>
+            <key>PayloadDescription</key>
+            <string>Configures VidLoader Web App shortcut on your iPhone or iPad home screen.</string>
+            <key>PayloadDisplayName</key>
+            <string>VidLoader Web App Clip</string>
+            <key>PayloadIdentifier</key>
+            <string>online.vidloader.webclip</string>
+            <key>PayloadType</key>
+            <string>com.apple.webClip.managed</string>
+            <key>PayloadUUID</key>
+            <string>B6C138E1-2C63-470C-9F6D-E45BD498263A</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>Precomposed</key>
+            <true/>
+            <key>URL</key>
+            <string>https://vidloader.online/</string>
+        </dict>
+    </array>
+    <key>PayloadDescription</key>
+    <string>Install VidLoader on your iOS Home Screen with one tap.</string>
+    <key>PayloadDisplayName</key>
+    <string>VidLoader iOS</string>
+    <key>PayloadIdentifier</key>
+    <string>online.vidloader.profile</string>
+    <key>PayloadOrganization</key>
+    <string>VidLoader</string>
+    <key>PayloadRemovalDisallowed</key>
+    <false/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>77D0CE9A-84C8-4DE3-9A0B-4D2423EA3121</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+</dict>
+</plist>
