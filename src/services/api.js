@@ -59,10 +59,6 @@ export async function resolveMedia(url, platform = null) {
       return data;
     }
 
-    if (data && data.blockedByPlatform) {
-      return data;
-    }
-
     if (data && data.message && (serverRes.status === 400)) {
       throw new Error(data.message);
     }
@@ -402,26 +398,5 @@ export function triggerActualDownload(title, formatItem, downloadUrl = null) {
 
   return filename;
 }
-
-/**
- * Builds a direct streaming URL (/api/stream) for instant one-click downloading
- * with zero server storage (AllTube pattern).
- */
-export function getDirectStreamUrl(url, formatItem, title = 'Video') {
-  const containerLower = (formatItem?.container || '').toLowerCase();
-  const isAudio = formatItem?.type === 'audio' || containerLower === 'mp3' || containerLower === 'm4a';
-  const format = containerLower === 'm4a' ? 'm4a' : isAudio ? 'mp3' : 'mp4';
-  const quality = formatItem?.quality || '720p HD';
-
-  const params = new URLSearchParams({
-    url: (url || '').trim(),
-    format,
-    quality,
-    title,
-  });
-
-  return `${getApiBaseUrl()}/stream?${params.toString()}`;
-}
-
 
 

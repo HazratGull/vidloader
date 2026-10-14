@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { validateUrl } from '../utils/urlValidator';
 import { formatDuration } from '../utils/formatters';
-import { resolveMedia, startProcess, getJobStatus, triggerActualDownload, getApiBaseUrl } from '../services/api';
+import { resolveMedia, startProcess, getJobStatus, triggerActualDownload } from '../services/api';
 import FormatSelector from './FormatSelector';
 import TutorialModal from './TutorialModal';
 import ReviewModal from './ReviewModal';
@@ -40,7 +40,6 @@ export default function Downloader({
   const [urlInput, setUrlInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [blockedPlatformNotice, setBlockedPlatformNotice] = useState(null);
   const [mediaResult, setMediaResult] = useState(null);
   const [activeJob, setActiveJob] = useState(null);
   const [pasteSuccess, setPasteSuccess] = useState(false);
@@ -121,7 +120,6 @@ export default function Downloader({
     if (isResolvingRef.current) return;
     const cleanUrl = targetUrl.trim();
     setError(null);
-    setBlockedPlatformNotice(null);
     setActiveJob(null);
 
     const validation = validateUrl(cleanUrl);
@@ -135,11 +133,6 @@ export default function Downloader({
     try {
       const result = await resolveMedia(validation.normalizedUrl, validation.platform || defaultPlatform);
       if (!result || !result.success) {
-        if (result && result.blockedByPlatform) {
-          setBlockedPlatformNotice(result);
-          setError(result.message);
-          return;
-        }
         throw new Error(result?.message || "We couldn't retrieve media information from this URL.");
       }
       setMediaResult(result);
@@ -312,12 +305,6 @@ export default function Downloader({
               clearInterval(activePollRef.current);
               activePollRef.current = null;
             }
-            if (statusRes.blockedByPlatform) {
-              setBlockedPlatformNotice({
-                platform: mediaResult?.source || 'This platform',
-                message: statusRes.error || 'This platform restricts cloud downloads on datacenter servers.'
-              });
-            }
             const cleanErr = statusRes.error || statusRes.message || 'Something went wrong while processing this video. Please try again.';
             setError(cleanErr);
             setActiveJob({
@@ -485,77 +472,6 @@ export default function Downloader({
           <div className="downloader-error-banner" role="alert">
             <AlertCircle size={18} className="error-icon" />
             <span className="error-text">{error}</span>
-          </div>
-        )}
-
-        {/* Platform Datacenter Restriction Desktop App Card */}
-        {blockedPlatformNotice && (
-          <div className="platform-datacenter-notice-card" role="region" aria-label="Desktop App Notice" style={{
-            margin: '1rem 0',
-            padding: '1.25rem',
-            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(249, 115, 22, 0.08))',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
-            borderRadius: '16px',
-            textAlign: 'left'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <span style={{
-                background: '#ef4444',
-                color: '#fff',
-                fontSize: '0.75rem',
-                fontWeight: '700',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                textTransform: 'uppercase'
-              }}>
-                100% Unblocked on Home IP
-              </span>
-              <strong style={{ fontSize: '0.95rem', color: '#1e293b' }}>
-                {blockedPlatformNotice.platform || 'This platform'} restricts cloud server downloads
-              </strong>
-            </div>
-            <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>
-              Major social networks block cloud hosting IP addresses. You can download this exact video instantly with zero blocks using our free 1-Click Desktop App, which executes directly on your home connection.
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              <a
-                href={`${getApiBaseUrl()}/download-pc-launcher`}
-                download="VidLoader-PC-Launcher.bat"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: '#2563eb',
-                  color: '#ffffff',
-                  fontWeight: '600',
-                  fontSize: '0.85rem',
-                  padding: '8px 14px',
-                  borderRadius: '10px',
-                  textDecoration: 'none'
-                }}
-              >
-                📥 Launch 1-Click PC App (.bat)
-              </a>
-              <a
-                href={`${getApiBaseUrl()}/download-installer?platform=windows`}
-                download="VidLoader-Setup.exe"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  color: '#1e293b',
-                  border: '1px solid #cbd5e1',
-                  fontWeight: '600',
-                  fontSize: '0.85rem',
-                  padding: '8px 14px',
-                  borderRadius: '10px',
-                  textDecoration: 'none'
-                }}
-              >
-                🖥️ Windows Setup (.exe)
-              </a>
-            </div>
           </div>
         )}
 

@@ -168,7 +168,7 @@ const server = http.createServer((req, res) => {
         service: 'VidLoader Backend API Engine',
         version: '2.4.1',
         message: 'Backend is active. Connect your frontend to this service.',
-        endpoints: ['/health', '/api/system-status', '/api/resolve', '/api/stream', '/api/process']
+        endpoints: ['/health', '/api/system-status', '/api/resolve', '/api/process']
       }));
     }
 
