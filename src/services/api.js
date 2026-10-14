@@ -40,13 +40,18 @@ export function resolveApiUrl(path) {
 export async function resolveMedia(url, platform = null) {
   const normalizedUrl = url.trim();
 
-  // 1. Try real server endpoint first
+  // 1. Try real server endpoint first with a strict 15s abort timeout
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     const serverRes = await fetch(`${getApiBaseUrl()}/resolve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: normalizedUrl, platform }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const data = await serverRes.json().catch(() => null);
 
@@ -54,16 +59,23 @@ export async function resolveMedia(url, platform = null) {
       return data;
     }
 
-    if (data && data.message && (serverRes.status === 400 || serverRes.status === 422)) {
+    if (data && data.blockedByPlatform) {
+      return data;
+    }
+
+    if (data && data.message && (serverRes.status === 400)) {
       throw new Error(data.message);
     }
   } catch (err) {
-    if (err.message && !err.message.includes('fetch') && !err.message.includes('Failed to fetch')) {
-      throw err;
+    if (err.name === 'AbortError') {
+      console.warn('[VidLoader API] /api/resolve request timed out, attempting client-side metadata extraction...');
+    } else if (err.message && !err.message.includes('fetch') && !err.message.includes('Failed to fetch')) {
+      // Allow fallback if 422 or server rejection
+      console.warn('[VidLoader API] Server resolve unavailable:', err.message);
     }
   }
 
-  // 2. Client-side Real Metadata Resolver (fallback when backend is unreachable)
+  // 2. Client-side Real Metadata Resolver (fallback when backend is unreachable or blocked)
   return await fetchRealMediaMetadata(normalizedUrl, platform);
 }
 
@@ -241,47 +253,74 @@ async function fetchRealMediaMetadata(url, platform = null) {
  * Initiates download/transcoding job on the server
  */
 export async function startProcess(url, format, quality, title = 'Video', formatId = '') {
-  const res = await fetch(`${getApiBaseUrl()}/process`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      url,
-      format,
-      quality,
-      title,
-      formatId,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-  const data = await res.json().catch(() => null);
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        format,
+        quality,
+        title,
+        formatId,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
 
-  if (res.ok && data && data.jobId) {
-    return data;
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data && data.jobId) {
+      return data;
+    }
+
+    const errMsg = data?.message || data?.error || `Failed to start download job (${res.status})`;
+    throw new Error(errMsg);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Connection timed out while initiating download job. Please try again.');
+    }
+    throw err;
   }
-
-  const errMsg = data?.message || data?.error || `Failed to start download job (${res.status})`;
-  throw new Error(errMsg);
 }
 
 /**
  * Retrieves the status of an ongoing processing job from the server
  */
 export async function getJobStatus(jobId) {
-  const res = await fetch(`${getApiBaseUrl()}/process/${jobId}`);
-  const data = await res.json().catch(() => null);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-  if (res.ok && data) {
-    return data;
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/process/${jobId}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data) {
+      return data;
+    }
+
+    if (res.status === 404) {
+      return { status: 'failed', error: 'Download job not found or expired.' };
+    }
+
+    return {
+      status: 'failed',
+      error: data?.message || data?.error || 'Unable to check download job status.',
+    };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    return {
+      status: 'failed',
+      error: err.name === 'AbortError' ? 'Job status check timed out.' : (err.message || 'Network error while checking status.'),
+    };
   }
-
-  if (res.status === 404) {
-    return { status: 'failed', error: 'Download job not found or expired.' };
-  }
-
-  return {
-    status: 'failed',
-    error: data?.message || data?.error || 'Unable to check download job status.',
-  };
 }
 
 /**
@@ -363,5 +402,26 @@ export function triggerActualDownload(title, formatItem, downloadUrl = null) {
 
   return filename;
 }
+
+/**
+ * Builds a direct streaming URL (/api/stream) for instant one-click downloading
+ * with zero server storage (AllTube pattern).
+ */
+export function getDirectStreamUrl(url, formatItem, title = 'Video') {
+  const containerLower = (formatItem?.container || '').toLowerCase();
+  const isAudio = formatItem?.type === 'audio' || containerLower === 'mp3' || containerLower === 'm4a';
+  const format = containerLower === 'm4a' ? 'm4a' : isAudio ? 'mp3' : 'mp4';
+  const quality = formatItem?.quality || '720p HD';
+
+  const params = new URLSearchParams({
+    url: (url || '').trim(),
+    format,
+    quality,
+    title,
+  });
+
+  return `${getApiBaseUrl()}/stream?${params.toString()}`;
+}
+
 
 

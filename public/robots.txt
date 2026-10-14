@@ -4,12 +4,10 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /temp_downloads/
 
 User-agent: Googlebot
 Allow: /
 Disallow: /api/
-Disallow: /temp_downloads/
 
 User-agent: Googlebot-Image
 Allow: /
@@ -22,7 +20,6 @@ Allow: /*.ico$
 User-agent: Bingbot
 Allow: /
 Disallow: /api/
-Disallow: /temp_downloads/
 
 Sitemap: https://vidloader.online/sitemap.xml
 Host: https://vidloader.online

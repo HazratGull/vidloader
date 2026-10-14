@@ -62,11 +62,30 @@ if (purgeInterval && typeof purgeInterval.unref === 'function') {
  * 6. Relative directory paths
  */
 export function getCookieFilePath() {
-  const candidates = [
-    process.env.COOKIES_PATH,
+  const tmpCookie = path.resolve('/tmp', 'secrets', 'cookies.txt');
+  const readOnlyCandidates = [
     '/etc/secrets/cookies.txt',
     '/etc/secrets/Vidloader/cookies.txt',
     '/etc/secrets/vidloader/cookies.txt',
+  ];
+
+  // Auto-stage read-only Render secret to writable /tmp path to prevent Python OSError 30
+  for (const rPath of readOnlyCandidates) {
+    if (fs.existsSync(rPath)) {
+      try {
+        const dir = path.dirname(tmpCookie);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.copyFileSync(rPath, tmpCookie);
+        fs.chmodSync(tmpCookie, 0o600);
+        return tmpCookie;
+      } catch {}
+    }
+  }
+
+  const candidates = [
+    process.env.COOKIES_PATH,
+    tmpCookie,
+    ...readOnlyCandidates,
     path.resolve(process.cwd(), 'cookies.txt'),
     path.resolve(__dirname, '../../cookies.txt'),
     path.resolve(__dirname, 'cookies.txt'),
@@ -196,6 +215,136 @@ export function checkFfmpeg() {
   return cachedHasFfmpeg;
 }
 
+let cachedHasDeno = null;
+export function checkDeno() {
+  if (cachedHasDeno !== null) return cachedHasDeno;
+  try {
+    const res = spawnSync('deno', ['--version'], { timeout: 2000, windowsHide: true });
+    cachedHasDeno = res.status === 0;
+  } catch {
+    cachedHasDeno = false;
+  }
+  return cachedHasDeno;
+}
+
+let cachedHasCurlCffi = null;
+export function checkCurlCffi() {
+  if (cachedHasCurlCffi !== null) return cachedHasCurlCffi;
+  try {
+    const res = spawnSync('python3', ['-c', 'import curl_cffi; print("ok")'], { timeout: 2000, windowsHide: true });
+    cachedHasCurlCffi = res.status === 0 && res.stdout?.toString()?.includes('ok');
+  } catch {
+    cachedHasCurlCffi = false;
+  }
+  return cachedHasCurlCffi;
+}
+
+export function getJsRuntimeArgs() {
+  if (checkDeno()) {
+    return ['--js-runtimes', 'deno'];
+  }
+  const nodeExec = process.execPath || 'node';
+  return ['--js-runtimes', `node:${nodeExec}`, '--remote-components', 'ejs:github'];
+}
+
+export function getExtractorArgs(hasCookies) {
+  const potArg = 'youtube:player_client=web,web_embedded;pot_provider=http://127.0.0.1:4416';
+  if (hasCookies) {
+    return ['--extractor-args', `${potArg}`];
+  }
+  return ['--extractor-args', `youtube:player_client=android,ios,visionos,web;${potArg}`];
+}
+
+export function buildCascadeFormatSpec(format, quality, hasFfmpeg) {
+  const isAudio = format === 'mp3' || format === 'm4a';
+  if (isAudio) {
+    return hasFfmpeg
+      ? 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio/best'
+      : 'ba[ext=m4a]/ba[ext=mp3]/ba/best';
+  }
+
+  let height = null;
+  const matchH = (quality || '').match(/(\d{3,4})p?/i);
+  if (matchH) {
+    height = parseInt(matchH[1], 10);
+  } else if ((quality || '').includes('2160') || (quality || '').includes('4K')) {
+    height = 2160;
+  } else if ((quality || '').includes('1440') || (quality || '').includes('2K')) {
+    height = 1440;
+  } else if ((quality || '').includes('1080') || (quality || '').includes('FHD')) {
+    height = 1080;
+  } else if ((quality || '').includes('720') || (quality || '').includes('HD')) {
+    height = 720;
+  } else if ((quality || '').includes('480')) {
+    height = 480;
+  } else if ((quality || '').includes('360')) {
+    height = 360;
+  }
+
+  const vres = height ? `[height<=?${height}]` : '';
+
+  if (hasFfmpeg) {
+    return `bestvideo${vres}[ext=mp4]+bestaudio[ext=m4a]/bestvideo${vres}+bestaudio/best${vres}[ext=mp4]/best${vres}/best`;
+  }
+  return `b${vres}[ext=mp4]/b${vres}/b/best${vres}/best`;
+}
+
+export function isPlatformBlockError(text) {
+  if (!text) return false;
+  const l = text.toLowerCase();
+  return l.includes('login') ||
+         l.includes('checkpoint') ||
+         l.includes('account authentication') ||
+         l.includes('http error 403') ||
+         l.includes('http error 401') ||
+         l.includes('sign in to confirm') ||
+         l.includes('bot');
+}
+
+export async function probeDirectCdnUrl(url) {
+  return new Promise((resolve) => {
+    if (!url || typeof url !== 'string') return resolve(null);
+    const lower = url.toLowerCase();
+    const isCandidate = lower.includes('tiktok.com') ||
+                        lower.includes('twitter.com') ||
+                        lower.includes('x.com') ||
+                        lower.includes('dailymotion.com');
+    if (!isCandidate) return resolve(null);
+
+    const detected = detectYtDlpCommand();
+    const impersonateArgs = checkCurlCffi() ? ['--impersonate', 'chrome'] : [];
+    const args = [
+      ...detected.prefixArgs,
+      '--no-warnings',
+      '--no-playlist',
+      ...impersonateArgs,
+      '--get-url',
+      '-f', 'best[ext=mp4]/best',
+      url
+    ];
+
+    let stdout = '';
+    let proc;
+    try {
+      proc = spawn(detected.cmd, args, { timeout: 8000 });
+    } catch {
+      return resolve(null);
+    }
+
+    proc.stdout?.on('data', d => { stdout += d; });
+    proc.on('close', code => {
+      if (code === 0 && stdout) {
+        const lines = stdout.trim().split('\n').map(l => l.trim()).filter(l => l.startsWith('http'));
+        if (lines.length === 1 && (lines[0].includes('.mp4') || lines[0].includes('video') || lines[0].includes('cdn') || lines[0].includes('tiktokcdn'))) {
+          return resolve(lines[0]);
+        }
+      }
+      resolve(null);
+    });
+    proc.on('error', () => resolve(null));
+  });
+}
+
 let cachedYtDlpCmd = null;
 
 export function detectYtDlpCommand() {
@@ -307,7 +456,7 @@ export function detectYtDlpCommand() {
 /**
  * Spawns yt-dlp using detected available binary or Python module.
  */
-export function spawnYtDlp(args) {
+export function spawnYtDlp(args, extraOptions = {}) {
   const nodeDir = path.dirname(process.execPath || process.argv[0]);
   const customEnv = {
     ...process.env,
@@ -319,7 +468,7 @@ export function spawnYtDlp(args) {
 
   const detected = detectYtDlpCommand();
   const allArgs = [...detected.prefixArgs, ...args];
-  return spawn(detected.cmd, allArgs, { cwd: process.cwd(), env: customEnv });
+  return spawn(detected.cmd, allArgs, { cwd: process.cwd(), env: customEnv, ...extraOptions });
 }
 
 export function runCommandAsync(cmd, args) {
@@ -372,18 +521,17 @@ export async function resolveVideo(url, platform = null) {
       console.log('[VidLoader Resolve] Using cookies file for YouTube auth:', activeCookiePath);
     }
 
-    const nodeExec = process.execPath || 'node';
-    const extractorArgs = cookieArgs.length > 0
-      ? ['--extractor-args', 'youtube:player_client=web,web_embedded']
-      : ['--extractor-args', 'youtube:player_client=android,ios,visionos,web'];
+    const jsArgs = getJsRuntimeArgs();
+    const extractorArgs = getExtractorArgs(Boolean(activeCookiePath));
+    const impersonateArgs = checkCurlCffi() ? ['--impersonate', 'chrome'] : [];
 
     const args = [
-      '--js-runtimes', `node:${nodeExec}`,
-      '--remote-components', 'ejs:github',
+      ...jsArgs,
       '--dump-single-json',
       '--no-warnings',
       '--no-playlist',
       '--no-check-certificates',
+      ...impersonateArgs,
       ...cookieArgs,
       ...extractorArgs,
       url
@@ -512,6 +660,14 @@ export async function resolveVideo(url, platform = null) {
           resolve(null);
         }
       } else {
+        if (isPlatformBlockError(stderrData)) {
+          return resolve({
+            success: false,
+            blockedByPlatform: true,
+            platform: platform || 'Social platform',
+            message: 'This platform restricts cloud server extraction. Use the 1-Click Desktop App (runs on your home IP with zero blocks).'
+          });
+        }
         resolve(null);
       }
     });
@@ -688,6 +844,11 @@ export function vidloaderBackendPlugin() {
             // 1. Attempt yt-dlp resolution
             const resolved = await resolveVideo(targetUrl, platform);
             if (resolved) {
+              if (resolved.blockedByPlatform) {
+                res.statusCode = 422;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify(resolved));
+              }
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify(resolved));
@@ -712,6 +873,97 @@ export function vidloaderBackendPlugin() {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
+        // 1b. GET /api/stream (AllTube Zero-Disk Live Streaming & 302 Direct CDN Redirect)
+        if (url.startsWith('/api/stream') && req.method === 'GET') {
+          try {
+            const parsed = new URL(req.url, 'http://localhost');
+            const targetUrl = (parsed.searchParams.get('url') || '').trim();
+            const format = (parsed.searchParams.get('format') || 'mp4').toLowerCase();
+            const quality = parsed.searchParams.get('quality') || '720p HD';
+            const title = parsed.searchParams.get('title') || 'video';
+
+            if (!targetUrl || !isValidPublicMediaUrl(targetUrl)) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: 'Valid URL is required' }));
+            }
+
+            const isAudio = format === 'mp3' || format === 'm4a';
+            const targetExt = isAudio ? (format === 'm4a' ? 'm4a' : 'mp3') : 'mp4';
+            const cleanTitle = (title || 'video')
+              .replace(/[^a-zA-Z0-9\s_-]/g, '')
+              .trim()
+              .replace(/\s+/g, '_')
+              .slice(0, 40) || 'Video';
+            const cleanQuality = (quality || 'HD').replace(/[^a-zA-Z0-9]/g, '_');
+            const downloadFilename = `VidLoader_${cleanTitle}_${cleanQuality}.${targetExt}`;
+
+            // Check if single multiplexed CDN stream can be directly 302 redirected (AllTube direct mode)
+            if (!isAudio) {
+              const directUrl = await probeDirectCdnUrl(targetUrl);
+              if (directUrl) {
+                console.log(`[VidLoader Stream] Issuing direct HTTP 302 redirect to CDN: ${targetUrl}`);
+                res.writeHead(302, {
+                  Location: directUrl,
+                  'Cache-Control': 'no-cache, no-store, must-revalidate'
+                });
+                return res.end();
+              }
+            }
+
+            const hasFfmpeg = checkFfmpeg();
+            const formatSpec = buildCascadeFormatSpec(format, quality, hasFfmpeg);
+            const activeCookiePath = getCookieFilePath();
+            const cookieArgs = activeCookiePath ? ['--cookies', activeCookiePath] : [];
+            const jsArgs = getJsRuntimeArgs();
+            const extractorArgs = getExtractorArgs(Boolean(activeCookiePath));
+            const impersonateArgs = checkCurlCffi() ? ['--impersonate', 'chrome'] : [];
+
+            const mimeType = isAudio ? (targetExt === 'm4a' ? 'audio/mp4' : 'audio/mpeg') : 'video/mp4';
+
+            res.writeHead(200, {
+              'Content-Type': mimeType,
+              'Content-Disposition': `attachment; filename="${downloadFilename}"; filename*=UTF-8''${encodeURIComponent(downloadFilename)}`,
+              'Transfer-Encoding': 'chunked',
+              'X-Accel-Buffering': 'no',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+            });
+
+            const ytdlpArgs = [
+              ...jsArgs,
+              '--no-playlist',
+              '--no-check-certificates',
+              '--no-warnings',
+              '--http-chunk-size', '10M',
+              ...impersonateArgs,
+              ...cookieArgs,
+              ...extractorArgs,
+              '-f', formatSpec,
+              '-o', '-',
+              targetUrl
+            ];
+
+            const proc = spawnYtDlp(ytdlpArgs, { detached: true });
+            proc.stdout.pipe(res);
+
+            const cleanup = () => {
+              try { process.kill(-proc.pid, 'SIGINT'); } catch {
+                try { proc.kill('SIGTERM'); } catch {}
+              }
+            };
+
+            res.on('close', cleanup);
+            proc.on('error', cleanup);
+            return;
+          } catch (err) {
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: err.message }));
+            }
           }
         }
 
@@ -833,6 +1085,7 @@ export function vidloaderBackendPlugin() {
               sizeBytes: job.fileSize,
             },
             error: job.error,
+            blockedByPlatform: Boolean(job.blockedByPlatform),
             diagLogs: job.diagLogs || null,
           }));
         }
@@ -1093,14 +1346,17 @@ export function vidloaderBackendPlugin() {
             const testUrl = parsed.searchParams.get('url') || 'https://www.youtube.com/watch?v=2smi1gjBBIw';
             const nodeExec = process.execPath || 'node';
             const hasC = Boolean(activeCookiePath);
+            const jsArgs = getJsRuntimeArgs();
+            const extractorArgs = getExtractorArgs(hasC);
+            const impersonateArgs = checkCurlCffi() ? ['--impersonate', 'chrome'] : [];
             const dRes = spawnSync(detected.cmd, [
               ...detected.prefixArgs,
-              '--js-runtimes', `node:${nodeExec}`,
-              '--remote-components', 'ejs:github',
+              ...jsArgs,
               '--no-warnings',
               '--no-playlist',
+              ...impersonateArgs,
               ...(hasC ? ['--cookies', activeCookiePath] : []),
-              '--extractor-args', hasC ? 'youtube:player_client=web,web_embedded' : 'youtube:player_client=android,web',
+              ...extractorArgs,
               '-v',
               '-F', testUrl
             ], {
@@ -1129,8 +1385,15 @@ export function vidloaderBackendPlugin() {
             ok: true,
             server: 'VidLoader Production Engine',
             port: process.env.PORT || 5173,
-            version: '2.4.2',
+            version: '2.5.0',
             os: process.platform,
+            features: {
+              deno: checkDeno(),
+              curl_cffi: checkCurlCffi(),
+              zeroDiskStreaming: true,
+              directCdn302: true,
+              potProviderConfigured: true,
+            },
             cookies: {
               detected: Boolean(activeCookiePath),
               path: activeCookiePath,
@@ -1187,24 +1450,25 @@ function startBackgroundDownload(job) {
     console.log('[VidLoader Download] Using cookies file for YouTube auth:', activeCookiePath);
   }
 
-  const nodeExec = process.execPath || 'node';
-  const extractorArgs = cookieArgs.length > 0
-    ? ['--extractor-args', 'youtube:player_client=web,web_embedded']
-    : ['--extractor-args', 'youtube:player_client=android,ios,visionos,web'];
+  const jsArgs = getJsRuntimeArgs();
+  const extractorArgs = getExtractorArgs(Boolean(activeCookiePath));
+  const impersonateArgs = checkCurlCffi() ? ['--impersonate', 'chrome'] : [];
 
   const baseArgs = [
-    '--js-runtimes', `node:${nodeExec}`,
-    '--remote-components', 'ejs:github',
+    ...jsArgs,
     '--no-playlist',
     '--no-check-certificates',
     '--no-warnings',
     '--newline',
     '--concurrent-fragments', '5',
+    '--http-chunk-size', '10M',
+    ...impersonateArgs,
     ...cookieArgs,
     ...extractorArgs,
   ];
 
   const hasFfmpeg = checkFfmpeg();
+  const formatSpec = buildCascadeFormatSpec(job.format, job.quality, hasFfmpeg);
 
   let initialArgs = [];
   if (isAudio) {
@@ -1232,14 +1496,6 @@ function startBackgroundDownload(job) {
       ];
     }
   } else {
-    let formatSpec = hasFfmpeg
-      ? (height
-          ? `best[height<=?${height}][ext=mp4]/best[height<=?${height}]/bestvideo[height<=?${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=?${height}]+bestaudio/best`
-          : 'best[ext=mp4]/bestvideo+bestaudio/best')
-      : (height
-          ? `b[height<=?${height}][ext=mp4]/b[height<=?${height}]/b[ext=mp4]/b/best[height<=?${height}]/best`
-          : 'b[ext=mp4]/b/best[ext=mp4]/best');
-
     const mergeArgs = hasFfmpeg ? ['--merge-output-format', 'mp4'] : [];
 
     initialArgs = [
@@ -1523,12 +1779,12 @@ function startBackgroundDownload(job) {
         }
       }
 
-      // Detect YouTube bot challenges immediately so we don't stall the user in a hopeless 60-second retry loop
-      const isBotChallenge = stderrData.toLowerCase().includes('sign in to confirm') || stderrData.toLowerCase().includes('bot');
-      if (isBotChallenge) {
-        console.warn(`[VidLoader Job ${job.id}] YouTube datacenter bot challenge encountered.`);
+      // Detect platform challenges immediately so we don't stall the user in a hopeless retry loop
+      if (isPlatformBlockError(stderrData)) {
+        console.warn(`[VidLoader Job ${job.id}] Platform datacenter challenge encountered:`, stderrData);
         job.status = 'failed';
-        job.error = 'YouTube security verification triggered on cloud datacenter IP. This specific video requires authentication on cloud servers. Use the 1-Click Desktop App (runs on your home IP with zero blocks), or try another quality.';
+        job.blockedByPlatform = true;
+        job.error = 'This video requires residential network authentication. Use the 1-Click Desktop App (runs on your home IP with zero blocks), or try another quality format.';
         return;
       }
 
